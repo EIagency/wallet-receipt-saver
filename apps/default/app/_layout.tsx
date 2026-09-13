@@ -4,6 +4,7 @@ import { Stack } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 import { setupNotificationHandler } from "@/lib/notifications";
+import { registerHeadlessWalletTask } from "@/lib/notificationListener";
 
 const convex = new ConvexReactClient(process.env.EXPO_PUBLIC_CONVEX_URL!, {
     unsavedChangesWarning: false,
@@ -20,6 +21,14 @@ const isNative = Platform.OS === "ios" || Platform.OS === "android";
 if (isNative) {
     setupNotificationHandler();
 }
+
+// Register background headless task so Google Wallet notifs are caught
+// even when the app is fully closed (Android only)
+registerHeadlessWalletTask((tx) => {
+    // Background: log the transaction. The foreground useWalletListener hook
+    // handles navigation when the app is open.
+    console.log("[Headless] Google Wallet tx detected:", tx.merchant, tx.amountCents);
+});
 
 export default function RootLayout() {
     return (

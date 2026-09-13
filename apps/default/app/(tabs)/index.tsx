@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    ActivityIndicator
+    ActivityIndicator, Platform
 } from "react-native";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -10,6 +10,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { formatCents, formatDateShort, getCategoryInfo, getMonthRange } from "@/lib/categories";
 import { DEMO_VISA_TRANSACTION } from "@/lib/notifications";
+import { useWalletListener } from "@/lib/useWalletListener";
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
@@ -19,6 +20,9 @@ export default function DashboardScreen() {
     const now = new Date();
     const [year, setYear] = useState(now.getFullYear());
     const [month, setMonth] = useState(now.getMonth());
+
+    // Real Google Wallet listener (Android) — auto-navigates on detection
+    const { hasPermission, lastTransaction, requestPermission } = useWalletListener();
 
     const { startDate, endDate } = getMonthRange(year, month);
     const stats = useQuery(api.expenses.statsByCategory, { startDate, endDate });
@@ -75,17 +79,46 @@ export default function DashboardScreen() {
                     </TouchableOpacity>
                 </View>
 
-                {/* Visa Notification Banner */}
-                <TouchableOpacity style={styles.visaBanner} onPress={handleSimulateVisa}>
-                    <View style={styles.visaLogoSmall}>
-                        <Ionicons name="card" size={18} color="white" />
-                    </View>
-                    <View style={styles.visaBannerText}>
-                        <Text style={styles.visaBannerTitle}>Visa Alert received</Text>
-                        <Text style={styles.visaBannerSub}>Tap to log your transaction</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={16} color="#1A1F71" />
-                </TouchableOpacity>
+                {/* Notification Listener Banner */}
+                {Platform.OS === "android" ? (
+                    hasPermission ? (
+                        <View style={styles.listenerActive}>
+                            <View style={styles.listenerDot} />
+                            <View style={styles.listenerText}>
+                                <Text style={styles.listenerTitle}>Google Wallet Listener Active</Text>
+                                <Text style={styles.listenerSub}>
+                                    {lastTransaction
+                                        ? `Last: ${lastTransaction.merchant} · ${formatCents(lastTransaction.amountCents)}`
+                                        : "Waiting for Google Wallet notifications…"}
+                                </Text>
+                            </View>
+                            <Ionicons name="wifi" size={16} color="#059669" />
+                        </View>
+                    ) : (
+                        <TouchableOpacity style={styles.permissionBanner} onPress={requestPermission}>
+                            <View style={styles.permissionIcon}>
+                                <Ionicons name="notifications-off-outline" size={20} color="#DC2626" />
+                            </View>
+                            <View style={styles.permissionText}>
+                                <Text style={styles.permissionTitle}>Enable Notification Access</Text>
+                                <Text style={styles.permissionSub}>Required to auto-detect Google Wallet transactions</Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={16} color="#DC2626" />
+                        </TouchableOpacity>
+                    )
+                ) : (
+                    // iOS / Web: show simulate button
+                    <TouchableOpacity style={styles.visaBanner} onPress={handleSimulateVisa}>
+                        <View style={styles.visaLogoSmall}>
+                            <Ionicons name="card" size={18} color="white" />
+                        </View>
+                        <View style={styles.visaBannerText}>
+                            <Text style={styles.visaBannerTitle}>Simulate Visa Alert</Text>
+                            <Text style={styles.visaBannerSub}>Tap to log a test transaction</Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={16} color="#1A1F71" />
+                    </TouchableOpacity>
+                )}
 
                 {/* Total Card */}
                 <View style={styles.totalCard}>
@@ -165,6 +198,19 @@ const styles = StyleSheet.create({
     monthRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 16, paddingVertical: 8 },
     monthArrow: { width: 36, height: 36, borderRadius: 10, backgroundColor: "white", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "#E5E7EB" },
     monthLabel: { fontSize: 16, fontWeight: "700", color: "#111827", minWidth: 100, textAlign: "center" },
+    // Google Wallet listener active state
+    listenerActive: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#ECFDF5", marginHorizontal: 20, marginTop: 12, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: "#A7F3D0" },
+    listenerDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#059669" },
+    listenerText: { flex: 1 },
+    listenerTitle: { fontSize: 13, fontWeight: "700", color: "#065F46" },
+    listenerSub: { fontSize: 12, color: "#6B7280", marginTop: 1 },
+    // Permission prompt
+    permissionBanner: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "#FEF2F2", marginHorizontal: 20, marginTop: 12, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: "#FECACA" },
+    permissionIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: "#FEE2E2", justifyContent: "center", alignItems: "center" },
+    permissionText: { flex: 1 },
+    permissionTitle: { fontSize: 14, fontWeight: "700", color: "#DC2626" },
+    permissionSub: { fontSize: 12, color: "#6B7280", marginTop: 1 },
+    // iOS simulate banner
     visaBanner: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "#EEF2FF", marginHorizontal: 20, marginTop: 12, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: "#C7D2FE" },
     visaLogoSmall: { width: 36, height: 36, borderRadius: 10, backgroundColor: "#1A1F71", justifyContent: "center", alignItems: "center" },
     visaBannerText: { flex: 1 },
