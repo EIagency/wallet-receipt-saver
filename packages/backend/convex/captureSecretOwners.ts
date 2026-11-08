@@ -5,9 +5,10 @@ import { hashCaptureSecret } from "./lib/capture";
 import { rateLimiter } from "./rateLimit";
 
 export const register = authMutation({
-    args: { secret: v.string() },
+    args: { secret: v.string(), userId: v.id("users") },
     returns: v.null(),
-    handler: async (ctx, { secret }) => {
+    handler: async (ctx, { secret, userId }) => {
+        if (userId !== ctx.user._id) throw new Error("You can only register a capture secret for yourself");
         await rateLimiter.limit(ctx, "registerCaptureOwner", { key: ctx.user._id, throws: true });
         const expected = process.env.CAPTURE_SECRET;
         if (!expected) throw new Error("CAPTURE_SECRET environment variable is required but not set");
@@ -24,7 +25,7 @@ export const register = authMutation({
             if (owner.userId !== ctx.user._id) throw new Error("This capture secret already belongs to another user");
             return null;
         }
-        await ctx.db.insert("captureSecretOwners", { secretHash, userId: ctx.user._id });
+        await ctx.db.insert("captureSecretOwners", { secretHash, userId, createdAt: Date.now() });
         return null;
     },
 });

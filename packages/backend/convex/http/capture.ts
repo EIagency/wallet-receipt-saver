@@ -1,6 +1,7 @@
 import { httpAction } from "../_generated/server";
 import { internal } from "../_generated/api";
-import { captureSchema } from "../lib/capture";
+import { ConvexError } from "convex/values";
+import { captureRateLimitSchema, captureSchema } from "../lib/capture";
 
 const MAX_BODY_BYTES = 8192;
 
@@ -45,20 +46,27 @@ export const capture = httpAction(async (ctx, request) => {
     }
     const parsed = captureSchema.safeParse(input);
     if (!parsed.success) return json({ error: "Invalid capture payload" }, 400);
-    const result = await ctx.runMutation(internal.capturedTransactions.record, { userId, ...parsed.data });
-    if (result.status === "rateLimited") {
-        return json({ error: "Capture rate limit exceeded" }, 429, {
-            "Retry-After": String(Math.max(1, Math.ceil(result.retryAfterMs / 1000))),
-        });
+    try {
+        const result = await ctx.runMutation(internal.capturedTransactions.record, { userId, ...parsed.data });
+        return json(result, result.code);
+    } catch (error: unknown) {
+        if (error instanceof ConvexError) {
+            const rateLimit = captureRateLimitSchema.safeParse(error.data);
+            if (rateLimit.success) {
+                return json({ error: "Capture rate limit exceeded" }, 429, {
+                    "Retry-After": String(Math.max(1, Math.ceil(rateLimit.data.retryAfterMs / 1000))),
+                });
+            }
+        }
+        throw error;
     }
-    return json({ status: result.status }, result.status === "duplicate" ? 208 : 200);
 });
 
 function unauthorized(): Response {
     return json({ error: "Unauthorized" }, 401, { "WWW-Authenticate": "Bearer" });
 }
 
-function json(body: Record<string, string>, status: number, extraHeaders: Record<string, string> = {}): Response {
+function json(body: Record<string, string | number>, status: number, extraHeaders: Record<string, string> = {}): Response {
     return new Response(JSON.stringify(body), {
         status,
         headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...extraHeaders },

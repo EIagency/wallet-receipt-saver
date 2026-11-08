@@ -7,20 +7,23 @@ export default defineSchema({
     captureSecretOwners: defineTable({
         secretHash: v.string(),
         userId: v.id("users"),
+        createdAt: v.number(),
     })
         .index("by_secretHash", ["secretHash"])
         .index("by_userId", ["userId"]),
     capturedTransactions: defineTable({
         userId: v.id("users"),
-        expenseId: v.id("expenses"),
         merchant: v.string(),
         amountMinor: v.number(),
         currency: v.union(v.literal("TRY"), v.literal("USD"), v.literal("EUR")),
         occurredAt: v.number(),
+        status: v.union(v.literal("pending"), v.literal("categorized")),
+        category: v.union(v.string(), v.null()),
         dedupeKey: v.string(),
+        createdAt: v.number(),
     })
-        .index("by_userId_and_dedupeKey", ["userId", "dedupeKey"])
-        .index("by_expenseId", ["expenseId"]),
+        .index("by_dedupeKey", ["dedupeKey"])
+        .index("by_userId_and_status_and_occurredAt", ["userId", "status", "occurredAt"]),
     expenses: defineTable({
         userId: v.id("users"),
         amountCents: v.number(),

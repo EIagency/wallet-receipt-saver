@@ -1,12 +1,10 @@
-# Transaction capture
+# Transaction capture endpoint
 
-`POST https://<deployment>.convex.site/capture`
+`POST /capture` accepts structured transaction data, resolves its owner from a hashed secret mapping, and stores a pending captured transaction. It does not create an expense before categorization. Authentication uses `Authorization: Bearer <CAPTURE_SECRET>` with a constant-time comparison.
 
-## Owner registration
+## Register an owner
 
-Set `CAPTURE_SECRET` in the backend environment to a random, high-entropy token (32+ characters recommended, no whitespace). While authenticated as the intended expense owner, call the public mutation `captureOwners:register` with `{ "secret": "<CAPTURE_SECRET>" }`. The mutation verifies the configured secret and stores only its SHA-256 fingerprint and the authenticated user's ID in `captureSecretOwners`. The same secret cannot be reassigned to another user. Register the owner before distributing the token to a capture client.
-
-The endpoint returns `401` for a missing/invalid secret, a missing owner mapping, or a deleted owner. Never supply a user ID in the capture request. After rotating the environment secret, register the new token as its intended owner; old tokens immediately stop authenticating.
+While authenticated as the intended owner, call `captureSecretOwners:register` with `{ "secret": "<CAPTURE_SECRET>", "userId": "<your users document ID>" }`. Registration verifies both the authenticated user ID and configured secret, stores only its SHA-256 hash and `createdAt`, and prevents another owner from claiming the same hash. Use a random, high-entropy token (32+ characters recommended, no whitespace). No plaintext secret is stored or indexed. Register the owner before distributing the token to a capture client.
 
 ## Request
 
@@ -29,18 +27,22 @@ Header: `Authorization: Bearer <CAPTURE_SECRET>`
 - `dedupeKey`: string, at most 64 characters; unique per owner, not per token. Use a stable nonempty event identifier.
 - Request bodies are limited to 8 KiB. Unknown JSON fields are stripped by Zod and are not forwarded or stored. Clients should never send raw notification text.
 
-## Responses and writes
+## Responses
 
-- `200`: `{ "status": "recorded" }`. Atomically inserts a capture record and an expense in the `other` category.
-- `208`: `{ "status": "duplicate" }`. The owner's dedupe key already exists. No expense is inserted or changed, even if the retried payload differs.
-- `400`: invalid JSON or payload.
-- `401`: unauthorized. Includes `WWW-Authenticate: Bearer`.
-- `413`: body too large.
-- `429`: per-owner capture rate limit exceeded. Includes `Retry-After` in seconds.
+- `200`: `{ "code": 200, "id": "<capturedTransactions ID>" }`. A new record has `status: "pending"`, `category: null`, and a server-generated `createdAt`.
+- `208`: `{ "code": 208, "existingId": "<original ID>", "reason": "duplicate" }`. Dedupe keys are globally unique across owners; replay does not overwrite the original record.
+- `400`: invalid JSON or payload, including fractional/nonpositive `amountMinor`, unsupported currency, or fields exceeding size limits.
+- `401`: missing, malformed, incorrect, or unregistered bearer secret.
+- `413`: body exceeds 8 KiB.
+- `429`: owner exceeded the capture rate limit; see `Retry-After`.
 
-Node's `timingSafeEqual` compares fixed-size SHA-256 digests of the supplied token and `CAPTURE_SECRET`. Verification runs in an internal Node action because Convex HTTP actions run in the default runtime. Owner lookup and recording functions are internal, not publicly callable mutations.
+Convex supplies document IDs as `_id`; the mutation responses expose them as `id`/`existingId`. User IDs are validated string IDs referencing `users`. Convex indexes are not SQL-style unique constraints: registration and recording enforce uniqueness atomically using indexed lookups in the same transaction as insertion.
 
-Only successful new records emit an application log containing `{ merchant, amountMinor }`. The HTTP handler never logs request bodies, headers, secret fingerprints, dedupe keys, or validation input. Capture records retain dedupe keys even if the related expense is later removed, so retries cannot recreate deleted expenses.
+## Pending transactions
+
+Call `capturedTransactions:listPending` with `{ "userId": "<your users document ID>" }`. It requires authentication and rejects requests for another user's records. Results are ordered by `occurredAt` descending and returned as `{ page, isDone, continueCursor }` (with optional Convex page-split metadata). The default first page has 50 rows. To page explicitly, pass `paginationOpts: { numItems: 50, cursor: null }`, then use the returned `continueCursor` for the next page.
+
+Captured transactions default to pending in `capturedTransactions:record`, which is internal-only so callers cannot forge ownership. Unknown notification fields are discarded. Only `merchant` and `amountMinor` are explicitly logged; bodies and credentials are never logged by capture code. Rotating `CAPTURE_SECRET` immediately invalidates the old bearer token; register the new secret before capture resumes.
 
 ## Regression tests
 

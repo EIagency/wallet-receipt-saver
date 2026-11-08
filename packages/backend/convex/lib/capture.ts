@@ -9,6 +9,11 @@ export const captureSchema = z.object({
     dedupeKey: z.string().max(64),
 });
 
+export const captureRateLimitSchema = z.object({
+    code: z.literal("CAPTURE_RATE_LIMITED"),
+    retryAfterMs: z.number().nonnegative(),
+});
+
 export const captureFields = {
     merchant: v.string(),
     amountMinor: v.number(),

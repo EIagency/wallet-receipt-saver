@@ -19,7 +19,7 @@ export const authenticate = internalAction({
         const suppliedHash = createHash("sha256").update(match[1], "utf8").digest();
         const expectedHash = createHash("sha256").update(expected, "utf8").digest();
         if (!timingSafeEqual(suppliedHash, expectedHash)) return null;
-        return await ctx.runQuery(internal.captureOwners.resolve, {
+        return await ctx.runQuery(internal.captureSecretOwners.resolve, {
             secretHash: expectedHash.toString("hex"),
         });
     },
