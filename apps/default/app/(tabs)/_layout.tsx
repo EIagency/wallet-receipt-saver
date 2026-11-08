@@ -34,6 +34,13 @@ export default function TabLayout() {
                         }}
                     />
                     <Tabs.Screen
+                        name="pending"
+                        options={{
+                            title: "Pending",
+                            tabBarIcon: ({ color, size }) => <Ionicons name="wallet-outline" size={size} color={color} />,
+                        }}
+                    />
+                    <Tabs.Screen
                         name="settings"
                         options={{
                             title: "Settings",

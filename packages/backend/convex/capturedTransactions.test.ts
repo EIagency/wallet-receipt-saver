@@ -107,7 +107,7 @@ describe("POST /capture", () => {
         { ...payload, amountMinor: -1 },
         { ...payload, amountMinor: 1.5 },
         { ...payload, amountMinor: Number.MAX_SAFE_INTEGER + 1 },
-        { ...payload, currency: "GBP" },
+        { ...payload, currency: "JPY" },
         { ...payload, occurredAt: "1780000000000" },
     ])("rejects invalid payload %#", async (body) => {
         const { t } = await setupOwner();
@@ -115,7 +115,7 @@ describe("POST /capture", () => {
         expect(console.info).not.toHaveBeenCalled();
     });
 
-    it.each(["TRY", "USD", "EUR"])("accepts %s and maximum string lengths", async (currency) => {
+    it.each(["TRY", "USD", "EUR", "GBP"])("accepts %s and maximum string lengths", async (currency) => {
         const { t } = await setupOwner();
         expect((await post(t, { ...payload, currency, merchant: "m".repeat(120), dedupeKey: "k".repeat(64) })).status).toBe(200);
     });
@@ -154,6 +154,36 @@ describe("capture secret ownership", () => {
 });
 
 describe("captured transactions", () => {
+    it("simulates a pending Wallet capture and categorizes it exactly once", async () => {
+        const { t, owner, userId } = await setupOwner();
+        const requestId = "wallet-simulation-test";
+        const captureId = await owner.mutation(api.capturedTransactions.simulateWalletTap, { requestId });
+        expect(await owner.mutation(api.capturedTransactions.simulateWalletTap, { requestId })).toBe(captureId);
+        const capture = await owner.query(api.capturedTransactions.get, { captureId });
+        expect(capture).toMatchObject({ userId, merchant: "Tesco", amountMinor: 1245, currency: "GBP", category: null, status: "pending", source: "Wallet" });
+        await expect(t.mutation(api.capturedTransactions.simulateWalletTap, { requestId: "no-auth" })).rejects.toThrow("Authentication required");
+        const otherUserId = await t.run((ctx) => ctx.db.insert("users", {}));
+        const other = t.withIdentity({ subject: otherUserId });
+        expect(await other.query(api.capturedTransactions.get, { captureId })).toBeNull();
+        await expect(other.mutation(api.capturedTransactions.categorize, { captureId, category: "groceries" })).rejects.toThrow("Capture not found");
+        await expect(owner.mutation(api.capturedTransactions.categorize, { captureId, category: "pending" })).rejects.toThrow("Choose a valid expense category");
+        await owner.mutation(api.capturedTransactions.categorize, { captureId, category: "groceries" });
+        await owner.mutation(api.capturedTransactions.categorize, { captureId, category: "groceries" });
+        expect(await owner.query(api.capturedTransactions.get, { captureId })).toMatchObject({ status: "categorized", category: "groceries" });
+        const expenses = await t.run((ctx) => ctx.db.query("expenses").withIndex("by_userId", (q) => q.eq("userId", userId)).take(2));
+        expect(expenses).toHaveLength(1);
+        expect(expenses[0]).toMatchObject({ merchant: "Tesco", amountCents: 1245, currency: "GBP", date: capture?.occurredAt, notificationId: captureId });
+        expect((await owner.query(api.capturedTransactions.listPending, { userId })).page).toHaveLength(0);
+    });
+
+    it("categorizes real and simulated captures with the same mutation", async () => {
+        const { t, owner, userId } = await setupOwner();
+        const result = await t.mutation(internal.capturedTransactions.record, { userId, ...payload });
+        if (result.code !== 200) throw new Error("Expected a new real capture");
+        await owner.mutation(api.capturedTransactions.categorize, { captureId: result.id, category: "groceries" });
+        expect(await owner.query(api.capturedTransactions.get, { captureId: result.id })).toMatchObject({ status: "categorized", category: "groceries", currency: payload.currency });
+    });
+
     it("enforces global dedupe keys across owners", async () => {
         const { t, userId } = await setupOwner();
         const otherUserId = await t.run((ctx) => ctx.db.insert("users", {}));

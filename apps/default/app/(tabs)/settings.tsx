@@ -1,9 +1,12 @@
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { DEMO_VISA_TRANSACTION } from "@/lib/notifications";
+import { WalletCaptureSecret } from "@/components/wallet-capture-secret";
+import { PendingCaptures } from "@/components/pending-captures";
+import { WalletDeveloperMode } from "@/components/wallet-developer-mode";
 
 export default function SettingsScreen() {
     const { signOut } = useAuthActions();
@@ -26,7 +29,7 @@ export default function SettingsScreen() {
     return (
         <View style={[styles.container, { paddingTop: insets.top }]}>
             <Text style={styles.title}>Settings</Text>
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <PendingCaptures>
                 <View style={styles.section}>
                     <Text style={styles.sectionLabel}>Visa Card</Text>
                     <TouchableOpacity style={styles.row} onPress={simulateVisa}>
@@ -39,6 +42,15 @@ export default function SettingsScreen() {
                         </View>
                         <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
                     </TouchableOpacity>
+                </View>
+
+                <View style={styles.section}>
+                    <WalletDeveloperMode />
+                </View>
+
+                <View style={styles.section}>
+                    <Text style={styles.sectionLabel}>Wallet Capture Secret</Text>
+                    <WalletCaptureSecret />
                 </View>
 
                 <View style={styles.section}>
@@ -61,7 +73,7 @@ export default function SettingsScreen() {
                         <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
                     </TouchableOpacity>
                 </View>
-            </ScrollView>
+            </PendingCaptures>
         </View>
     );
 }

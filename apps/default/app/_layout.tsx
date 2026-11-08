@@ -27,6 +27,10 @@ export default function RootLayout() {
             <Stack screenOptions={{ headerShown: false }}>
                 <Stack.Screen name="(tabs)" />
                 <Stack.Screen
+                    name="categorize-capture"
+                    options={{ presentation: "formSheet", headerShown: true, title: "Categorize Capture", sheetGrabberVisible: true, sheetAllowedDetents: [0.75, 1] }}
+                />
+                <Stack.Screen
                     name="add-expense"
                     options={{ presentation: "formSheet", headerShown: true, title: "Add Expense", headerTitleStyle: { fontWeight: "700" } }}
                 />

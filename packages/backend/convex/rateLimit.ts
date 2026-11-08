@@ -2,6 +2,7 @@ import { RateLimiter, MINUTE, HOUR } from "@convex-dev/rate-limiter";
 import { components } from "./_generated/api";
 
 export const rateLimiter = new RateLimiter(components.rateLimiter, {
+    categorizeCapture: { kind: "token bucket", rate: 30, period: MINUTE, capacity: 50 },
     registerCaptureOwner: { kind: "fixed window", rate: 5, period: HOUR },
     captureTransaction: { kind: "token bucket", rate: 30, period: MINUTE, capacity: 100 },
 });
