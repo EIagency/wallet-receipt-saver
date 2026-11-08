@@ -38,8 +38,7 @@
             ],
             "expo-secure-store",
             "expo-font",
-            "expo-web-browser",
-            "expo-notification-listener"
+            "expo-web-browser"
         ],
         "experiments": {
             "typedRoutes": true
