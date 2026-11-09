@@ -10,6 +10,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { formatCents, formatDateShort, getCategoryInfo, getMonthRange, CATEGORIES } from "@/lib/categories";
 import { exportReceiptPDF } from "@/lib/pdf";
 import type { Id } from "@/convex/_generated/dataModel";
+import Animated from "react-native-reanimated";
+import { useFloatingTabBarInset, useTabBarScrollHandler } from "@/components/floating-tab-bar";
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
@@ -26,6 +28,9 @@ export default function ExpensesScreen() {
     const expenses = useQuery(api.expenses.listByDateRange, { startDate, endDate });
 
     const filtered = filterCat ? (expenses ?? []).filter(e => e.category === filterCat) : (expenses ?? []);
+
+    const onScroll = useTabBarScrollHandler();
+    const paddingBottom = useFloatingTabBarInset();
 
     function prevMonth() {
         if (month === 0) { setMonth(11); setYear(y => y - 1); }
@@ -74,10 +79,11 @@ export default function ExpensesScreen() {
             {/* Category filter chips */}
             <FlatList
                 horizontal
+                style={{ flexGrow: 0 }}
                 data={[{ key: null, label: "All" }, ...CATEGORIES.map(c => ({ key: c.key, label: c.label }))]}
                 keyExtractor={item => item.key ?? "all"}
                 showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.chips}
+                contentContainerStyle={[styles.chips, { alignItems: "center", gap: 8 }]}
                 renderItem={({ item }) => (
                     <TouchableOpacity
                         style={[styles.chip, filterCat === item.key && styles.chipActive]}
@@ -88,10 +94,12 @@ export default function ExpensesScreen() {
                 )}
             />
 
-            <FlatList
+            <Animated.FlatList
                 data={filtered}
+                onScroll={onScroll}
+                scrollEventThrottle={16}
                 keyExtractor={item => item._id}
-                contentContainerStyle={styles.list}
+                contentContainerStyle={[styles.list, { paddingBottom }]}
                 ListEmptyComponent={
                     <View style={styles.empty}>
                         <Ionicons name="receipt-outline" size={48} color="#D1D5DB" />
@@ -133,11 +141,11 @@ const styles = StyleSheet.create({
     monthArrow: { width: 36, height: 36, borderRadius: 10, backgroundColor: "white", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "#E5E7EB" },
     monthLabel: { fontSize: 16, fontWeight: "700", color: "#111827", minWidth: 100, textAlign: "center" },
     chips: { paddingHorizontal: 20, paddingVertical: 12, gap: 8 },
-    chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: "white", borderWidth: 1, borderColor: "#E5E7EB" },
+    chip: { height: 40, paddingHorizontal: 14, borderRadius: 20, backgroundColor: "white", borderWidth: 1, borderColor: "#E5E7EB", alignItems: "center", justifyContent: "center" },
     chipActive: { backgroundColor: "#1A1F71", borderColor: "#1A1F71" },
     chipText: { fontSize: 13, fontWeight: "600", color: "#374151" },
     chipTextActive: { color: "white" },
-    list: { paddingHorizontal: 20, gap: 10, paddingBottom: 32 },
+    list: { paddingHorizontal: 20, gap: 10 },
     empty: { alignItems: "center", paddingTop: 60, gap: 12 },
     emptyText: { color: "#9CA3AF", fontSize: 16 },
     expenseCard: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "white", padding: 14, borderRadius: 16 },
